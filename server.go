@@ -1,17 +1,24 @@
 package main
 
 import (
+	"bufio"
 	"encoding/csv"
 	"flag"
+	"fmt"
 	"io"
 	"log"
 	"os"
 	"strconv"
 )
 
-type quizRecord struct {
+type questionBankRecord struct {
 	question string
 	answer   int
+}
+
+type quiz struct {
+	totalQuestions   int
+	correctQuestions int
 }
 
 var quizFile string
@@ -23,31 +30,58 @@ func init() {
 
 func main() {
 	flag.Parse()
-	quiz, err := buildQuiz(quizFile)
-	_ = quiz
-	_ = err
-}
-
-func buildQuiz(quizFile string) (quiz []quizRecord, err error) {
-	f, err := os.Open(quizFile)
-	defer f.Close()
+	questionBank, err := buildQuiz(quizFile)
 	if err != nil {
 		log.Fatalf("%v", err)
 	}
+	fmt.Println("Let's Play a Tiny Math Quiz!")
+	game := playQuiz(questionBank)
+	fmt.Println("Thanks for Playing!")
+	fmt.Printf("Your Score: %d\nTotal Questions: %d\n", game.correctQuestions, game.totalQuestions)
+}
+
+func buildQuiz(quizFile string) (questionBank []questionBankRecord, err error) {
+	f, e := os.Open(quizFile)
+	defer f.Close()
+	if e != nil {
+		err = e
+		return
+	}
 	r := csv.NewReader(f)
 	for {
-		record, err := r.Read()
-		if err == io.EOF {
+		record, e := r.Read()
+		if e == io.EOF {
 			break
 		}
-		if err != nil {
-			log.Fatalf("%v", err)
+		if e != nil {
+			err = e
+			return
 		}
-		ansAsInt, err := strconv.Atoi(record[1])
-		if err != nil {
-			log.Fatalf("%v", err)
+		ansAsInt, e := strconv.Atoi(record[1])
+		if e != nil {
+			err = e
+			return
 		}
-		quiz = append(quiz, quizRecord{record[0], ansAsInt})
+		questionBank = append(questionBank, questionBankRecord{record[0], ansAsInt})
+	}
+	return
+}
+
+func playQuiz(questionBank []questionBankRecord) (game quiz) {
+	s := bufio.NewScanner(os.Stdin)
+	for _, record := range questionBank {
+		fmt.Printf("Question: %s?\nYour Answer: ", record.question)
+		s.Scan()
+		yourAns := s.Text()
+		correctAns := record.answer
+		yourAnsAsInt, err := strconv.Atoi(yourAns)
+		if err != nil {
+			continue
+		}
+		if yourAnsAsInt == correctAns {
+			game.correctQuestions++
+		}
+		game.totalQuestions++
 	}
 	return
 }
