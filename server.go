@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"time"
 )
 
 type problem struct {
@@ -21,28 +22,34 @@ type quiz struct {
 	score    int
 }
 
-var quizFile string
-
-func init() {
-	const defaultQuizFile = "problems.csv"
-	flag.StringVar(&quizFile, "qf", defaultQuizFile, "quiz file name (only csv)")
+type settings struct {
+	filename string
+	duration int
 }
+
+const (
+	defaultQuizFile      = "problems.csv"
+	defaultQuizTimeInSec = 30
+)
 
 func main() {
 	game := quiz{}
+	setting := settings{}
+	flag.StringVar(&setting.filename, "qf", defaultQuizFile, "quiz file name (only csv)")
+	flag.IntVar(&setting.duration, "t", defaultQuizTimeInSec, "quiz duration in seconds")
 	flag.Parse()
-	problems, err := buildQuiz(quizFile)
+	problems, err := getProblems(setting.filename)
 	if err != nil {
 		log.Fatalf("%v", err)
 	}
 	game.problems = problems
-	fmt.Println("Let's Play a Tiny Math Quiz!")
-	game = playQuiz(game)
+	timer := startQuiz(setting.duration)
+	game = playQuiz(game, timer)
 	fmt.Println("Thanks for Playing!")
 	fmt.Printf("You scored %d out of %d\n", game.score, len(game.problems))
 }
 
-func buildQuiz(quizFile string) (problems []problem, err error) {
+func getProblems(quizFile string) (problems []problem, err error) {
 	f, e := os.Open(quizFile)
 	defer f.Close()
 	if e != nil {
@@ -69,20 +76,42 @@ func buildQuiz(quizFile string) (problems []problem, err error) {
 	return
 }
 
-func playQuiz(game quiz) quiz {
+func startQuiz(duration int) <-chan time.Time {
+	fmt.Println("Let's Play a Tiny Math Quiz!")
+	fmt.Printf("You have %d seconds to complete\n", duration)
+	fmt.Print("Press ENTER to start!")
+	fmt.Scanln()
+	return time.After(time.Duration(duration) * time.Second)
+}
+
+func playQuiz(game quiz, timer <-chan time.Time) quiz {
 	s := bufio.NewScanner(os.Stdin)
+	ans := make(chan string)
+loop:
 	for _, record := range game.problems {
 		fmt.Printf("Question: %s?\nYour Answer: ", record.question)
-		s.Scan()
-		yourAns := s.Text()
-		correctAns := record.answer
-		yourAnsAsInt, err := strconv.Atoi(yourAns)
-		if err != nil {
-			continue
+		go getAnswer(s, ans)
+		select {
+		case <-timer:
+			fmt.Println("\nOops! Time has expired!")
+			break loop
+		case yourAns := <-ans:
+			correctAns := record.answer
+			yourAnsAsInt, err := strconv.Atoi(yourAns)
+			if err != nil {
+				continue
+			}
+			if yourAnsAsInt == correctAns {
+				game.score++
+			}
 		}
-		if yourAnsAsInt == correctAns {
-			game.score++
-		}
+
 	}
 	return game
+}
+
+func getAnswer(s *bufio.Scanner, ans chan<- string) {
+	s.Scan()
+	yourAns := s.Text()
+	ans <- yourAns
 }
