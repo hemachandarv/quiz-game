@@ -11,14 +11,14 @@ import (
 	"strconv"
 )
 
-type questionBankRecord struct {
+type problem struct {
 	question string
 	answer   int
 }
 
 type quiz struct {
-	totalQuestions   int
-	correctQuestions int
+	problems []problem
+	score    int
 }
 
 var quizFile string
@@ -29,18 +29,20 @@ func init() {
 }
 
 func main() {
+	game := quiz{}
 	flag.Parse()
-	questionBank, err := buildQuiz(quizFile)
+	problems, err := buildQuiz(quizFile)
 	if err != nil {
 		log.Fatalf("%v", err)
 	}
+	game.problems = problems
 	fmt.Println("Let's Play a Tiny Math Quiz!")
-	game := playQuiz(questionBank)
+	game = playQuiz(game)
 	fmt.Println("Thanks for Playing!")
-	fmt.Printf("Your Score: %d\nTotal Questions: %d\n", game.correctQuestions, game.totalQuestions)
+	fmt.Printf("You scored %d out of %d\n", game.score, len(game.problems))
 }
 
-func buildQuiz(quizFile string) (questionBank []questionBankRecord, err error) {
+func buildQuiz(quizFile string) (problems []problem, err error) {
 	f, e := os.Open(quizFile)
 	defer f.Close()
 	if e != nil {
@@ -62,14 +64,14 @@ func buildQuiz(quizFile string) (questionBank []questionBankRecord, err error) {
 			err = e
 			return
 		}
-		questionBank = append(questionBank, questionBankRecord{record[0], ansAsInt})
+		problems = append(problems, problem{record[0], ansAsInt})
 	}
 	return
 }
 
-func playQuiz(questionBank []questionBankRecord) (game quiz) {
+func playQuiz(game quiz) quiz {
 	s := bufio.NewScanner(os.Stdin)
-	for _, record := range questionBank {
+	for _, record := range game.problems {
 		fmt.Printf("Question: %s?\nYour Answer: ", record.question)
 		s.Scan()
 		yourAns := s.Text()
@@ -79,9 +81,8 @@ func playQuiz(questionBank []questionBankRecord) (game quiz) {
 			continue
 		}
 		if yourAnsAsInt == correctAns {
-			game.correctQuestions++
+			game.score++
 		}
-		game.totalQuestions++
 	}
-	return
+	return game
 }
