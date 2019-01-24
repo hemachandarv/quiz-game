@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"os"
 	"strconv"
 	"time"
@@ -25,11 +26,13 @@ type quiz struct {
 type settings struct {
 	filename string
 	duration int
+	shuffle  bool
 }
 
 const (
 	defaultQuizFile      = "problems.csv"
 	defaultQuizTimeInSec = 30
+	defaultShuffle       = false
 )
 
 func main() {
@@ -37,10 +40,14 @@ func main() {
 	setting := settings{}
 	flag.StringVar(&setting.filename, "qf", defaultQuizFile, "quiz file name (only csv)")
 	flag.IntVar(&setting.duration, "t", defaultQuizTimeInSec, "quiz duration in seconds")
+	flag.BoolVar(&setting.shuffle, "s", defaultShuffle, "shuffle problems")
 	flag.Parse()
 	problems, err := getProblems(setting.filename)
 	if err != nil {
 		log.Fatalf("%v", err)
+	}
+	if setting.shuffle {
+		problems = shuffleProblems(problems)
 	}
 	game.problems = problems
 	timer := startQuiz(setting.duration)
@@ -74,6 +81,14 @@ func getProblems(quizFile string) (problems []problem, err error) {
 		problems = append(problems, problem{record[0], ansAsInt})
 	}
 	return
+}
+
+func shuffleProblems(problems []problem) []problem {
+	rand.Seed(int64(time.Now().Nanosecond()))
+	rand.Shuffle(len(problems), func(i, j int) {
+		problems[i], problems[j] = problems[j], problems[i]
+	})
+	return problems
 }
 
 func startQuiz(duration int) <-chan time.Time {
